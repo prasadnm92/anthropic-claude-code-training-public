@@ -11,6 +11,10 @@ Closes NWP-____
 
 <!-- One short paragraph. What does this do that the app could not do before? -->
 
+## Business impact
+
+<!-- One line: who benefits and how, in business terms. For example: "Ops no longer hand-edit exports, saving 3–4 hours a month." -->
+
 ## How I verified it
 
 <!-- The commands you ran and what you saw. Paste the test summary line. Say what you clicked and what appeared. -->

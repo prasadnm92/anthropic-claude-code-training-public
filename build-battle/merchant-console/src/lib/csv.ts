@@ -5,9 +5,9 @@ import { formatMoney } from "./money"
 /**
  * CSV export for the payments table.
  *
- * The column set is fixed. Ops has asked for control over it — that is
- * NWP-101 — but today everyone gets every column, including the card
- * last four, whether or not the file is going to a merchant.
+ * `toCsv` writes whichever columns it is given, in that order. The export
+ * route picks them with `parseColumns`, which leaves the card last four out
+ * unless ops asks for it.
  */
 
 export const EXPORT_COLUMNS = [
@@ -24,6 +24,45 @@ export const EXPORT_COLUMNS = [
 ] as const
 
 export type ExportColumn = (typeof EXPORT_COLUMNS)[number]
+
+/** What ops gets unless they choose otherwise. Card last four is opt-in. */
+export const DEFAULT_EXPORT_COLUMNS: readonly ExportColumn[] =
+  EXPORT_COLUMNS.filter((column) => column !== "last4")
+
+export type ColumnSelection =
+  | { ok: true; columns: ExportColumn[] }
+  | { ok: false; message: string }
+
+/**
+ * Turns the client's `columns` param into a validated, ordered column list.
+ * Column names arrive from the client, so every one is checked against
+ * EXPORT_COLUMNS here. Nothing unvalidated reaches the serializer.
+ *
+ * `null` (param absent) means the defaults. An empty selection is rejected,
+ * because an export with no columns is not a file anyone wants.
+ */
+export function parseColumns(raw: string | null): ColumnSelection {
+  if (raw === null) return { ok: true, columns: [...DEFAULT_EXPORT_COLUMNS] }
+
+  const requested = raw
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+  if (requested.length === 0) {
+    return { ok: false, message: "Select at least one column to export." }
+  }
+
+  const columns: ExportColumn[] = []
+  for (const name of requested) {
+    if (!(EXPORT_COLUMNS as readonly string[]).includes(name)) {
+      return { ok: false, message: "Unknown export column." }
+    }
+    if (!columns.includes(name as ExportColumn)) {
+      columns.push(name as ExportColumn)
+    }
+  }
+  return { ok: true, columns }
+}
 
 function escapeCell(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
@@ -66,6 +105,11 @@ export function toCsv(
   return [header, ...rows].join("\n")
 }
 
-export function exportFilename(date = new Date()): string {
-  return `payments-${date.toISOString().slice(0, 10)}.csv`
+/**
+ * `scope` labels what the file contains, e.g. `disputed` or `all`. Callers pass
+ * only values they have already validated against an allowlist.
+ */
+export function exportFilename(date = new Date(), scope?: string): string {
+  const day = date.toISOString().slice(0, 10)
+  return scope ? `payments-${scope}-${day}.csv` : `payments-${day}.csv`
 }
